@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Raycasting</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+</head>
+<body>
+    <script src="sketch.js"></script>
+    <div id="canvas-container"></div>
+    <div id="controls">
+        <button id="add-wall">Add Wall</button>
+        <button id="add-light">Add Light</button>
+        <button id="add-ray">Add Ray</button>
+        <button id="clear">Clear</button>
+
+        <div id="light-controls">
+            <label for="radius">Radius</label>
+            <input id="radius-input" type="number" min="1" max = "1000" value="100">
+            <label for="angle">Angle</label>
+            <input id="angle-input"type="number" min="0" max = "360" value="0">
+            <label for="rayCount">Ray Count</label>
+            <input id="rayCount-input" type="number" min="1" max = "1000" value="360">
+        </div>
+</body>
+</html>

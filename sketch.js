@@ -134,44 +134,48 @@ class MoveAbleObject {
         }
     }
 }
-class lightSourceObject extends MoveAbleObject{
-    constructor(position, size, lightSize, color, rayCount, angleStart, angleEnd) {
-        super(position, size, true)
-        this.color = color;
-        this.rays = []
+class LightSource extends MoveAbleObject{
+    constructor(position, handleSize, lightSize, lightColor, rayCount, angleStart, angleEnd) {
+        super(position, handleSize, true)
+        this.color = lightColor;
         this.angleStart = angleStart
         this.angleEnd = angleEnd
         this.rayCount = rayCount
         this.lightSize = lightSize
-        for(let i = 1; i <= rayCount; i++) {
-            this.rays.push(new rayObject(position, this.lightSize, this.angleStart + (this.angleEnd-this.angleStart)/this.rayCount*i))
+        this.lightColor = lightColor
+        this.populateRaysArray = function() {
+            let array = []
+            for(let i = 1; i <= rayCount; i++) {
+                array.push(new Ray(position, this.lightSize, this.angleStart + (this.angleEnd-this.angleStart)/this.rayCount*i))
+            }
+            return array
         }
-        this.draw = function() {
+        this.rays = this.populateRaysArray()
+        this.drawHandle = function() {
             fill(255);
-            ellipse(this.position.x,this.position.y,size.x,size.y);
+            ellipse(this.position.x,this.position.y,handleSize.x,handleSize.y);
         }
         this.drawShape = function() {
             this.rays.forEach(ray => {
                 ray.checkCollision();
-                line(this.position.x, this.position.y, ray.targetPoint.x, ray.targetPoint.y)
             });
-            fill(this.color)
-            beginShape()
-            if(this.angleEnd-this.angleStart == 360) {
-                vertex(this.rays[0].targetPoint.x, this.rays[0].targetPoint.y)}
-            else{
-            vertex(this.position.x, this.position.y)
-            }
-            for(let i = 0; i < this.rays.length; i++) {
-                vertex(this.rays[i].targetPoint.x, this.rays[i].targetPoint.y)
-            }
-            if(this.angleEnd-this.angleStart == 360) {
-                vertex(this.rays[0].targetPoint.x, this.rays[0].targetPoint.y)
-            }
-            else{
+            for(let i = 0; i < 100; i++) {
+                fill(color(red(this.lightColor),green(this.lightColor), blue(this.lightColor),i*.1))
+                beginShape()
                 vertex(this.position.x, this.position.y)
+                for(let j = 0; j < this.rays.length; j++) {
+                    let newTargetPoint = this.rays[j].targetPoint.copy()
+                    newTargetPoint.sub(newTargetPoint.copy().sub(this.position).mult(0.01*i))
+                    
+                    let collisionPointDist = dist(this.rays[j].collisionPoint.x, this.rays[j].collisionPoint.y, this.position.x, this.position.y)
+                    let newTargetPointDist = dist(newTargetPoint.x, newTargetPoint.y, this.position.x, this.position.y)
+                    if(newTargetPointDist > collisionPointDist) {
+                        newTargetPoint = this.rays[j].collisionPoint.copy()
+                    }
+                    vertex(newTargetPoint.x, newTargetPoint.y)
+                }
+                endShape(CLOSE)                
             }
-            endShape();
         }
         this.spin = function(delta) {
             this.angleStart += delta
@@ -190,23 +194,28 @@ class lightSourceObject extends MoveAbleObject{
         }
     }
 }
-class rayObject {
+class Ray {
     constructor(origin, length, r) {
         this.origin = origin
         this.length = length
         this.rotation = r
         this.targetPoint = createVector(this.origin.x + cos(this.rotation) * this.length, this.origin.y + sin(this.rotation) * this.length)
+        this.collisionPoint = createVector(this.origin.x + cos(this.rotation) * this.length, this.origin.y + sin(this.rotation) * this.length)
         this.draw = function() {
-            stroke(255,0,0);
-            line(this.origin.x, this.origin.y, this.targetPoint.x, this.targetPoint.y)
+            line(this.origin.x, this.origin.y, this.collisionPoint.x, this.collisionPoint.y)
         }
         this.checkCollision = function() {
             this.targetPoint = createVector(this.origin.x + cos(this.rotation) * this.length, this.origin.y + sin(this.rotation) * this.length)
-            for(let i = 0; i <= 1; i+=0.01) {
+            for(let i = 0; i <= 1; i+=0.001) {
                 let checkPoint = p5.Vector.lerp(this.origin,this.targetPoint, i)
                 if(pointInsideObstacle(checkPoint)) {
                     fill(255,0,0)
-                    this.targetPoint = checkPoint
+                    this.collisionPoint = checkPoint
+                    break;
+                }
+                else{
+                    this.collisionPoint = this.targetPoint
+                
                 }
             }
         }
@@ -215,10 +224,9 @@ class rayObject {
 }
 class Obstacle extends MoveAbleObject{
     constructor(position, size, c, isEllipse) {
-        super(position, size, false)
+        super(position, size, isEllipse)
         this.draw = function() {
             fill(c)
-            stroke(0)
             if(this.isEllipse) {
                 ellipse(this.position.x,this.position.y,size.x,size.y)
             }
@@ -230,20 +238,19 @@ class Obstacle extends MoveAbleObject{
 }
 
 let light
-let light2
 let obstacles = []
 function setup() {
-    
+    noStroke()
     let canvasWidth = ((windowWidth/3)*2)
     let canvasHeight = ((windowHeight/3)*2)
     let cnv = createCanvas(canvasWidth, canvasHeight);
     cnv.position((windowWidth/6), (windowHeight/6));    
     angleMode(DEGREES)
     background(0);
-    light = new lightSourceObject(createVector(200,200), createVector(10,10),100,color(50,255,0),150, 0, 45);
-    light2 = new lightSourceObject(createVector(150,210), createVector(10,10),100,color(255,0,0),150, 0, 90);
-    for(let i = 0; i < 1; i++) {
-        obstacles.push(new Obstacle(createVector(random(0,width),random(0,height)),createVector(random(50,200),random(50,200)),color(random(0,255),random(0,255),random(0,255)), true));
+    light = new LightSource(createVector(200,200), createVector(10,10),100,color(0,255,0),50, 0, 45);
+    light2 = new LightSource(createVector(150,210), createVector(10,10),300,color(255,0,0),50, 0, 90);
+    for(let i = 0; i <6; i++) {
+        obstacles.push(new Obstacle(createVector(random(0,width),random(0,height)),createVector(random(50,200),random(50,200)),color(random(0,255),random(0,255),random(0,255))));
     } 
 
 
@@ -265,8 +272,11 @@ function setup() {
         light.rayCount = this.value()
         light.rays = []
         for(let i = 1; i <= light.rayCount; i++) {
-            light.rays.push(new rayObject(light.position, light.lightSize, light.angleStart + (light.angleEnd-light.angleStart)/light.rayCount*i))
+            light.rays.push(new Ray(light.position, light.lightSize, light.angleStart + (light.angleEnd-light.angleStart)/light.rayCount*i))
         }
+    });
+    select("#color-input").input(function() {
+        light.lightColor = color(this.value())
     });
 }
 
@@ -276,12 +286,12 @@ function draw() {
     obstacles.forEach(obstacle => {
         obstacle.draw()
     });
+    blendMode(ADD)
     light.drawShape();
-    blendMode(EXCLUSION)
     light2.drawShape();
     blendMode(BLEND)
-    light.draw();
-    light2.draw();
+    light.drawHandle();
+    light2.drawHandle();
     light.move();
     light2.move();
     if(light.moving) {

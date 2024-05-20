@@ -9,20 +9,31 @@
     <script src="sketch.js"></script>
     <div id="canvas-container"></div>
     <div id="controls">
-        <button id="add-wall">Add Wall</button>
         <button id="add-light">Add Light</button>
-        <button id="add-ray">Add Ray</button>
-        <button id="clear">Clear</button>
+        <button id="remove-light">Remove Light</button>
+        <button id="add-obstacle">Add Obstacle</button>
+        <button id="remove-obstacle">Remove Obstacle</button>
+        <button id="remove-all">Remove All</button>
+        <label for="show-rays">Show Rays</label>
+        <input id="show-rays" type="checkbox" unchecked>
 
-        <div id="light-controls">
+        <div id="light-settings">
             <label for="radius">Radius</label>
-            <input id="radius-input" type="number" min="1" max = "1000" value="100">
+            <input id="radius-input" type="number" min="1" max = "1000" value="100" step="10">
             <label for="angle">Angle</label>
             <input id="angle-input"type="number" min="0" max = "360" value="0">
             <label for="rayCount">Ray Count</label>
-            <input id="rayCount-input" type="number" min="1" max = "50" value="50">
+            <input id="rayCount-input" type="number" min="1" max = "200" value="30">
             <label for="color">Color</label>
-            <input id="color-input" type="color" value="#ffffff">
+            <input id="light-color-input" type="color" value="#ffffff">
+            <label for="intensity">Intensity</label>
+            <input id="intensity-input" type="number" min="0" max = "255" value="1" step="0.1">
+        </div>
+        <div id="obstacle-settings">
+            <label for="color">Color</label>
+            <input id="obstacle-color-input" type="color" value="#ffffff">
+            <label for="Ellipse">Ellipse?</label>
+            <input id="ellipse-input" type="checkbox">
         </div>
 </body>
 </html>

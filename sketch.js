@@ -37,6 +37,20 @@ class MoveAbleObject {
             return(mouseX > this.resizeArea.x && mouseX < this.resizeArea.x + this.resizeArea.w && mouseY > this.resizeArea.y && mouseY < this.resizeArea.y + this.resizeArea.h)
         }
         this.mousePressed = function(){
+            if(this.checkCursorInShape() || this.checkCursorInResizeArea()) {
+                selectedLight = undefined
+                selectedObstacle = undefined
+                document.getElementById("light-settings").style.display = "none"
+                document.getElementById("obstacle-settings").style.display = "none"
+                if(this instanceof LightSource) {
+                    selectedLight = this;
+                    displayHTMLLightSettings()
+                }
+                else if(this instanceof Obstacle) {
+                    selectedObstacle = this;
+                    displayHTMLObstacleSettings()
+                }
+            }
             if(this.checkCursorInShape()) {
                 this.moving = true
             }
@@ -135,38 +149,49 @@ class MoveAbleObject {
     }
 }
 class LightSource extends MoveAbleObject{
-    constructor(position, handleSize, lightSize, lightColor, rayCount, angleStart, angleEnd) {
+    constructor(position, handleSize, lightSize, lightColor, rayCount, angleStart, angleEnd, intensity) {
         super(position, handleSize, true)
-        this.color = lightColor;
+        
         this.angleStart = angleStart
         this.angleEnd = angleEnd
         this.rayCount = rayCount
         this.lightSize = lightSize
         this.lightColor = lightColor
+        this.intensity = intensity
         this.populateRaysArray = function() {
             let array = []
-            for(let i = 1; i <= rayCount; i++) {
-                array.push(new Ray(position, this.lightSize, this.angleStart + (this.angleEnd-this.angleStart)/this.rayCount*i))
+            for(let i = 1; i <= this.rayCount; i++) {
+                array.push(new Ray(this.position, this.lightSize, this.angleStart + (this.angleEnd-this.angleStart)/this.rayCount*i, 0.001))
             }
             return array
         }
         this.rays = this.populateRaysArray()
         this.drawHandle = function() {
             fill(255);
+            if(selectedLight == this) {
+                stroke(255,0,0)
+                strokeWeight(2)
+            }
             ellipse(this.position.x,this.position.y,handleSize.x,handleSize.y);
+            noStroke()
+        }
+        this.checkRaysCollision = function() {
+            this.rays.forEach(ray => {
+                ray.checkCollision()
+            });
         }
         this.drawShape = function() {
-            this.rays.forEach(ray => {
-                ray.checkCollision();
-            });
-            for(let i = 0; i < 100; i++) {
-                fill(color(red(this.lightColor),green(this.lightColor), blue(this.lightColor),i*.1))
+            let maxOpacity = 255
+            let steps = 100
+            let stepOpacity = maxOpacity/(steps * (steps + 1)/2)
+            for(let i = 0; i < steps; i++) {
+                let currentOpacity = (stepOpacity*i)*this.intensity;
+                fill(color(red(this.lightColor),green(this.lightColor), blue(this.lightColor),currentOpacity))
                 beginShape()
                 vertex(this.position.x, this.position.y)
                 for(let j = 0; j < this.rays.length; j++) {
                     let newTargetPoint = this.rays[j].targetPoint.copy()
                     newTargetPoint.sub(newTargetPoint.copy().sub(this.position).mult(0.01*i))
-                    
                     let collisionPointDist = dist(this.rays[j].collisionPoint.x, this.rays[j].collisionPoint.y, this.position.x, this.position.y)
                     let newTargetPointDist = dist(newTargetPoint.x, newTargetPoint.y, this.position.x, this.position.y)
                     if(newTargetPointDist > collisionPointDist) {
@@ -174,8 +199,13 @@ class LightSource extends MoveAbleObject{
                     }
                     vertex(newTargetPoint.x, newTargetPoint.y)
                 }
-                endShape(CLOSE)                
+                endShape(CLOSE)  
             }
+        }
+        this.drawRays = function() {
+            this.rays.forEach(ray => {
+                ray.drawRayLine()
+            });
         }
         this.spin = function(delta) {
             this.angleStart += delta
@@ -195,50 +225,66 @@ class LightSource extends MoveAbleObject{
     }
 }
 class Ray {
-    constructor(origin, length, r) {
-        this.origin = origin
-        this.length = length
-        this.rotation = r
-        this.targetPoint = createVector(this.origin.x + cos(this.rotation) * this.length, this.origin.y + sin(this.rotation) * this.length)
-        this.collisionPoint = createVector(this.origin.x + cos(this.rotation) * this.length, this.origin.y + sin(this.rotation) * this.length)
-        this.draw = function() {
+    constructor(origin, length, rotation, collisionCheckFrequency) {
+        this.origin = origin;
+        this.length = length;
+        this.rotation = rotation;
+        this.collisionCheckFrequency = collisionCheckFrequency;
+        this.targetPoint;
+        this.collisionPoint;
+        this.drawRayLine = function() {
+            stroke(255,255,255,255)
+            strokeWeight(1)
             line(this.origin.x, this.origin.y, this.collisionPoint.x, this.collisionPoint.y)
         }
         this.checkCollision = function() {
             this.targetPoint = createVector(this.origin.x + cos(this.rotation) * this.length, this.origin.y + sin(this.rotation) * this.length)
-            for(let i = 0; i <= 1; i+=0.001) {
-                let checkPoint = p5.Vector.lerp(this.origin,this.targetPoint, i)
-                if(pointInsideObstacle(checkPoint)) {
-                    fill(255,0,0)
-                    this.collisionPoint = checkPoint
-                    break;
-                }
-                else{
-                    this.collisionPoint = this.targetPoint
-                
+            for(let i = 0; i <= 1; i+= this.collisionCheckFrequency) {
+                let lerpedPoint = p5.Vector.lerp(this.origin,this.targetPoint, i)
+                if(pointInsideObstacle(lerpedPoint)) {
+                    this.collisionPoint = lerpedPoint;
+                    return;
                 }
             }
+            this.collisionPoint = this.targetPoint;
         }
         
     }
 }
 class Obstacle extends MoveAbleObject{
-    constructor(position, size, c, isEllipse) {
+    constructor(position, size, obstacleColor, isEllipse) {
         super(position, size, isEllipse)
+        this.obstacleColor = obstacleColor
         this.draw = function() {
-            fill(c)
+            fill(this.obstacleColor)
+            if(selectedObstacle == this) {
+                stroke(255,0,0)
+                strokeWeight(2)
+            }
             if(this.isEllipse) {
                 ellipse(this.position.x,this.position.y,size.x,size.y)
             }
             else {
             rect(this.position.x, this.position.y, this.size.x, this.size.y)
             }
+            noStroke()
+        }
+        this.checkPointInside = function(point) {
+            if(this.isEllipse) {
+                let xDist = point.x - this.position.x
+                let yDist = point.y - this.position.y
+                return (xDist*xDist)/(this.size.x/2*this.size.x/2) + (yDist*yDist)/(this.size.y/2*this.size.y/2) < 1
+            }
+            return(point.x > this.position.x && point.x < this.position.x + this.size.x && point.y > this.position.y && point.y < this.position.y + this.size.y)
         }
     }
 }
 
-let light
+let selectedLight;
+let lights = [];
+let selectedObstacle;
 let obstacles = []
+let showRays = false
 function setup() {
     noStroke()
     let canvasWidth = ((windowWidth/3)*2)
@@ -247,81 +293,171 @@ function setup() {
     cnv.position((windowWidth/6), (windowHeight/6));    
     angleMode(DEGREES)
     background(0);
-    light = new LightSource(createVector(200,200), createVector(10,10),100,color(0,255,0),50, 0, 45);
-    light2 = new LightSource(createVector(150,210), createVector(10,10),300,color(255,0,0),50, 0, 90);
-    for(let i = 0; i <6; i++) {
-        obstacles.push(new Obstacle(createVector(random(0,width),random(0,height)),createVector(random(50,200),random(50,200)),color(random(0,255),random(0,255),random(0,255))));
-    } 
 
+    instantiateLight()
+    instantiateObstacle()
+    
 
-    //SETUP HTML FUNCTIONS
-    select("#radius-input").input(function() {
-        light.lightSize = this.value()  
-        for(let i = 0; i < light.rayCount; i++) {
-            light.rays[i].length = this.value()
+    setupHTMLFunctions()
+}
+
+function setupHTMLFunctions() {
+    select("#radius-input").input(function () {
+        selectedLight.lightSize = this.value()
+        for (let i = 0; i < selectedLight.rayCount; i++) {
+            selectedLight.rays[i].length = this.value()
         }
     })
-    select("#angle-input").input(function() {
-        light.angleEnd = light.angleStart + Number(this.value())
-        for(let i = 0; i < light.rayCount; i++) {
-            light.rays[i].rotation = light.angleStart + (light.angleEnd-light.angleStart)/light.rayCount*i
+    select("#angle-input").input(function () {
+        selectedLight.angleEnd = selectedLight.angleStart + Number(this.value())
+        for (let i = 0; i < selectedLight.rayCount; i++) {
+            selectedLight.rays[i].rotation = selectedLight.angleStart + (selectedLight.angleEnd - selectedLight.angleStart) / selectedLight.rayCount * i
         }
-    });
+    })
+    select("#rayCount-input").input(function () {
+        selectedLight.rayCount = this.value()
+        selectedLight.rays = []
+        selectedLight.rays = selectedLight.populateRaysArray()
+    })
+    select("#light-color-input").input(function () {
+        selectedLight.lightColor = color(this.value())
+    })
+    select("#intensity-input").input(function () {
+        selectedLight.intensity = this.value()
+    })
+    select("#ellipse-input").input(function () {
+        selectedObstacle.isEllipse = this.checked()
+    })
+    select("#obstacle-color-input").input(function () {
+        selectedObstacle.obstacleColor = color(this.value())
+    })
 
-    select("#rayCount-input").input(function() {
-        light.rayCount = this.value()
-        light.rays = []
-        for(let i = 1; i <= light.rayCount; i++) {
-            light.rays.push(new Ray(light.position, light.lightSize, light.angleStart + (light.angleEnd-light.angleStart)/light.rayCount*i))
-        }
-    });
-    select("#color-input").input(function() {
-        light.lightColor = color(this.value())
-    });
+    select("#add-light").mousePressed(instantiateLight)
+    select("#remove-light").mousePressed(removeLight)
+    select("#add-obstacle").mousePressed(instantiateObstacle)
+    select("#remove-obstacle").mousePressed(removeObstacle)
+    select("#remove-all").mousePressed(removeAll)
+    select("#show-rays").changed(function () {
+        showRays = this.checked()
+    })
+    document.getElementById("light-settings").style.display = "none"
+    document.getElementById("obstacle-settings").style.display = "none"
+}
+
+function displayHTMLLightSettings() {    
+    document.getElementById("light-settings").style.display = "block"
+    select("#radius-input").value(selectedLight.lightSize)
+    select("#angle-input").value(selectedLight.angleEnd - selectedLight.angleStart)
+    select("#rayCount-input").value(selectedLight.rayCount)
+
+    let r = red(selectedLight.lightColor);
+    let g = green(selectedLight.lightColor);
+    let b = blue(selectedLight.lightColor);
+    let hexColor = '#' + hex(r, 2) + hex(g, 2) + hex(b, 2);
+    select("#light-color-input").value(hexColor);
+}
+function displayHTMLObstacleSettings() {
+    document.getElementById("obstacle-settings").style.display = "block"
+    let r = red(selectedObstacle.obstacleColor);
+    let g = green(selectedObstacle.obstacleColor);
+    let b = blue(selectedObstacle.obstacleColor);
+    let hexColor = '#' + hex(r, 2) + hex(g, 2) + hex(b, 2);
+    select("#obstacle-color-input").value(hexColor);
+    select("#ellipse-input").checked(selectedObstacle.isEllipse)
 }
 
 function draw() {
     cursor(ARROW)
     background(0);
+    
+    blendMode(ADD)
+    lights.forEach(light => {
+        light.drawHandle()
+        light.checkRaysCollision()
+        if(showRays) {
+            light.drawRays()
+        }
+        else {
+            light.drawShape()
+        }
+    });
+    blendMode(BLEND)
     obstacles.forEach(obstacle => {
         obstacle.draw()
     });
-    blendMode(ADD)
-    light.drawShape();
-    light2.drawShape();
-    blendMode(BLEND)
-    light.drawHandle();
-    light2.drawHandle();
-    light.move();
-    light2.move();
-    if(light.moving) {
-        light.move()
+    handleObjectMovement()
+    
+}
 
-        return;
+function handleObjectMovement() {
+    if(!cursorInCanvas()) {
+        return
     }
-    if(light2.moving) {
-        light2.move()
-        return;
+    for(let i = lights.length-1; i >= 0; i--) {
+        lights[i].move();
+        if(lights[i].moving) {
+            return;
+        }
     }
     for(let i = obstacles.length-1; i >= 0; i--) {
-        if(obstacles[i].resizing) {
-            obstacles[i].resize()
-            break;
-        }
-        if(obstacles[i].moving) {
-            obstacles[i].move()
-            break;
-        }
         obstacles[i].resize()
         obstacles[i].move()
+        if(obstacles[i].resizing || obstacles[i].moving) {
+            return;
+        }
     }
-    
+}
+function instantiateLight() {
+    let newPos = createVector(width/4, height/4)
+    let newHandleSize = createVector(10,10)
+    let newLightSize = 800
+    let newLightColor = color(255)
+    let newRayCount = 30
+    let newAngleStart = 0
+    let newAngleEnd = 45
+    let newIntensity = 1
+    newLight = new LightSource(newPos, newHandleSize, newLightSize, newLightColor, newRayCount, newAngleStart, newAngleEnd, newIntensity)
+    lights.push(newLight)
+    selectedLight = newLight
+    displayHTMLLightSettings()
+}
+
+function instantiateObstacle() {
+    let newPos = createVector(width/2, height/2)
+    let newSize = createVector(100,100)
+    let newColor = color(255)
+    let newIsEllipse = false
+    let newObstacle = new Obstacle(newPos, newSize, newColor, newIsEllipse)    
+    obstacles.push(newObstacle)
+    selectedObstacle = newObstacle
+    displayHTMLObstacleSettings()
+}
+
+function removeLight() {
+    if(selectedLight == undefined) {
+        return
+    }
+    lights.splice(lights.indexOf(selectedLight),1)
+    selectedLight = undefined
+}
+
+function removeObstacle() {
+    if(selectedObstacle == undefined) {
+        return
+    }
+    obstacles.splice(obstacles.indexOf(selectedObstacle),1)
+    selectedObstacle = undefined
+}
+
+function removeAll() {
+    lights = []
+    obstacles = []
 }
 
 function pointInsideObstacle(point) {
     for(let i = 0; i < obstacles.length; i++) {
         let obstacle = obstacles[i]
-        if(point.x > obstacle.position.x && point.x < obstacle.position.x + obstacle.size.x && point.y > obstacle.position.y && point.y < obstacle.position.y + obstacle.size.y) {
+        if(obstacle.checkPointInside(point)) {
             return true
         }
     }
@@ -331,19 +467,27 @@ function mousePressed() {
     obstacles.forEach(obstacle => {
         obstacle.mousePressed()
     });
-    light.mousePressed()
-    light2.mousePressed()
+    lights.forEach(light => {
+        light.mousePressed()
+    });
 }
 function mouseReleased() {
     obstacles.forEach(obstacle => {
         obstacle.moving = false
         obstacle.resizing = false
     });
-    light.moving = false
-    light2.moving = false
+    lights.forEach(light => {
+        light.moving = false
+    });
 }
 function mouseWheel(event)
 {
-    light.spin(event.delta/20)
+    if(!cursorInCanvas()) {
+        return
+    }
+    selectedLight.spin(event.delta/20)
+}
+function cursorInCanvas() {
+    return(mouseX > 0 && mouseX < width && mouseY > 0 && mouseY < height)
 }
 
